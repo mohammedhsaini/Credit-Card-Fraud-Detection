@@ -1,0 +1,570 @@
+---
+title: "credit card fraud detection"
+author: "Mohammed_HSAINI"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Libraries
+```{r}
+library(caret)
+library(corrplot)
+library(smotefamily)
+```
+## Load dataset
+
+```{r}
+creditfraud <- read.csv("C:/Users/lenovo/Downloads/Credit Card Fraud Detection/creditcardFraud.csv")
+```
+
+## Exploratory Data Analysis
+
+```{r}
+# change class to factor
+creditfraud$class <- as.factor(creditfraud$class)
+```
+
+```{r}
+# Structure of the dataset
+str(creditfraud)
+# Missing values
+sum(is.na(creditfraud))
+# Check the imbalance in the dataset
+summary(creditfraud$class)
+prop.table(table(creditfraud$class))
+```
+```{r}
+# Compile histograms for each variables
+par(mfrow=c(3,5))
+i<- 1
+for (i in 1:30) {
+  hist((creditfraud[,i]), 
+       main = paste("Distribution of", colnames(creditfraud[i])),
+       xlab = colnames(creditfraud[,i]), col= "light blue")
+  
+}
+```
+
+
+```{r}
+# Compute the correlation among the variables
+r<- cor(creditfraud[,1:30])
+corrplot(r,type = "lower", tl.col = "black",tl.srt=15)
+```
+
+## Create training / test datasets
+```{r}
+# split data into training and testing dataset used for model building (training dataset)
+set.seed(1337)
+train <- createDataPartition(creditfraud$class,p = 0.70,times = 1,list = F)
+train.orig <- creditfraud[train,]
+test <- creditfraud[-train,]
+
+# check the proportion of observations allocated to each group
+dim(train.orig)/dim(creditfraud)
+dim(test)/dim(creditfraud)
+
+#class balance for training dataset
+prop.table(table(train.orig$class))
+
+#class balance for testing dataset
+prop.table(table(test$class))
+```
+
+## Generate synthetic samples
+```{r}
+# SMOTE balanced
+train.smote <- SMOTE(train.orig[,-31],train.orig[,31],K=5)
+names(train.smote)
+train.smote <- train.smote$data
+train.smote$class <- as.factor(train.smote$class)
+
+#ADASYN balanced
+train.adas <- ADAS(train.orig[,-31],train.orig[,31],K=5)
+names(train.adas)
+train.adas <- train.adas$data
+train.adas$class <- as.factor(train.adas$class)
+
+#Density based SMOTE
+train.dbsmote <- DBSMOTE(train.orig[,-31],train.orig[,31])
+names(train.dbsmote)
+train.dbsmote <- train.dbsmote$data
+train.dbsmote$class <- as.factor(train.dbsmote$class)
+```
+
+##Evaluate
+```{r}
+#Class Distribution of SMOTE balanced dataset
+prop.table(table(train.smote$class))
+
+#Class Distribution of ADASYN balanced dataset
+prop.table(table(train.adas$class))
+
+
+#Class Distribution of DB SMOTE balanced dataset
+prop.table(table(train.dbsmote$class))
+```
+
+
+#Train classifiers on original imbalanced dataset
+```{r}
+# Global Options that will be used across of our trained models
+CTRL <- trainControl(method = "cv",
+                     number = 10,
+                     classProbs = T,
+                     summaryFunction = twoClassSummary
+                     )
+
+# Decision Tree : Original Data
+
+dt_orig <- train(class~.,
+                 data = train.orig,
+                 method = 'rpart',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+
+# Naive Bayes regression : Original Data
+
+NB_orig <- train(class~.,
+                 data = train.orig,
+                 method = 'naive_bayes',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+# Linear Discriminant Analysis : Original Data
+
+lda_orig <- train(class~.,
+                 data = train.orig,
+                 method = 'lda',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+#compile classifications on test data using models trained in the original imbalanced training dataset
+
+### Decision Tree Model Predictions
+dt_orig_predict <- predict(dt_orig,test,type = 'prob')
+
+
+### Decision Tree - Assign class to probabilities
+dt_orig_test <- factor(ifelse(dt_orig_predict$yes>0.5,'yes','no'))
+
+### Decision Tree Save Precision / Recall/F
+Precision_dt0rig <- posPredValue(dt_orig_test,test$class,positive = 'yes')
+recall_dt0rig <- sensitivity(dt_orig_test,test$class,positive = 'yes')
+F1_dt0rig <- (2*Precision_dt0rig*recall_dt0rig)/(Precision_dt0rig+recall_dt0rig)
+
+
+
+
+#######################################################
+# Naive Bayes Model - trained on the original dataset #
+#######################################################
+
+## NB Model predictions
+nb_orig_predict <- predict(NB_orig,test,type = 'prob')
+
+
+### NB - Assign class to probabilities
+nb_orig_test <- factor(ifelse(nb_orig_predict$yes>0.5,'yes','no'))
+
+### NB Save Precision / Recall/F
+Precision_nb0rig <- posPredValue(nb_orig_test,test$class,positive = 'yes')
+recall_nb0rig <- sensitivity(nb_orig_test,test$class,positive = 'yes')
+F1_nb0rig <- (2*Precision_nb0rig*recall_nb0rig)/(Precision_nb0rig+recall_nb0rig)
+
+
+#######################################################
+# Linear Discriminant Analysis  - trained on the original dataset #
+#######################################################
+
+## LDA Model predictions
+lda_orig_predict <- predict(lda_orig,test,type = 'prob')
+
+
+### LDA - Assign class to probabilities
+lda_orig_test <- factor(ifelse(lda_orig_predict$yes>0.5,'yes','no'))
+
+### LDA Save Precision / Recall/F
+Precision_lda0rig <- posPredValue(lda_orig_test,test$class,positive = 'yes')
+recall_lda0rig <- sensitivity(lda_orig_test,test$class,positive = 'yes')
+F1_lda0rig <- (2*Precision_lda0rig*recall_lda0rig)/(Precision_lda0rig+recall_lda0rig)
+```
+
+
+
+#Train classifiers on SMOTE balanced dataset
+```{r}
+# Decision Tree : SMOTE Data
+
+dt_SMOTE <- train(class~.,
+                 data = train.smote,
+                 method = 'rpart',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+
+# Naive Bayes regression : SMOTE Data
+
+NB_SMOTE <- train(class~.,
+                 data = train.smote,
+                 method = 'naive_bayes',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+# Linear Discriminant Analysis : SMOTE Data
+
+lda_SMOTE <- train(class~.,
+                 data = train.smote,
+                 method = 'lda',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+#compile classifications on test data using models trained in the SMOTE balanced training dataset
+
+### Decision Tree Model Predictions
+dt_smote_predict <- predict(dt_SMOTE ,test,type = 'prob')
+
+
+### Decision Tree - Assign class to probabilities
+dt_smote_test <- factor(ifelse(dt_smote_predict$yes>0.5,'yes','no'))
+
+### Decision Tree Save Precision / Recall/F
+Precision_dtsmote <- posPredValue(dt_smote_test,test$class,positive = 'yes')
+recall_dtsmote <- sensitivity(dt_smote_test,test$class,positive = 'yes')
+F1_dtsmote <- (2*Precision_dtsmote*recall_dtsmote)/(Precision_dtsmote+recall_dtsmote)
+
+
+#######################################################
+# Naive Bayes Model - trained on the SMOTE dataset #
+#######################################################
+
+### Naive Bayes Model Predictions
+nb_smote_predict <- predict(NB_SMOTE ,test,type = 'prob')
+
+
+### Naive Bayes - Assign class to probabilities
+nb_smote_test <- factor(ifelse(nb_smote_predict$yes>0.5,'yes','no'))
+
+### Naive Bayes Save Precision / Recall/F
+Precision_nbsmote <- posPredValue(nb_smote_test,test$class,positive = 'yes')
+recall_nbsmote <- sensitivity(nb_smote_test,test$class,positive = 'yes')
+F1_nbsmote <- (2*Precision_nbsmote*recall_nbsmote)/(Precision_nbsmote+recall_nbsmote)
+
+
+###############################################################
+# Linear Discriminant Analysis - trained on the SMOTE dataset #
+###############################################################
+
+
+### LDA Predictions
+lda_smote_predict <- predict(lda_SMOTE ,test,type = 'prob')
+
+
+### LDA - Assign class to probabilities
+lda_smote_test <- factor(ifelse(lda_smote_predict$yes>0.5,'yes','no'))
+
+### LDA Save Precision / Recall/F
+Precision_ldasmote <- posPredValue(lda_smote_test,test$class,positive = 'yes')
+recall_ldasmote <- sensitivity(lda_smote_test,test$class,positive = 'yes')
+F1_ldasmote <- (2*Precision_ldasmote*recall_ldasmote)/(Precision_ldasmote+recall_ldasmote)
+```
+
+
+
+#Train classifiers on ADASYN balanced dataset
+```{r}
+# Decision Tree : ADASYN Data
+
+dt_ADAS <- train(class~.,
+                 data = train.adas,
+                 method = 'rpart',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+
+# Naive Bayes regression : ADASYN Data
+
+NB_adas <- train(class~.,
+                 data = train.adas,
+                 method = 'naive_bayes',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+# Linear Discriminant Analysis : ADASYN Data
+
+lda_adas <- train(class~.,
+                 data = train.adas,
+                 method = 'lda',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+#compile classifications on test data using models trained in the ADASYN balanced training dataset
+
+### Decision Tree Model Predictions
+dt_adas_predict <- predict(dt_ADAS ,test,type = 'prob')
+
+
+### Decision Tree - Assign class to probabilities
+dt_adas_test <- factor(ifelse(dt_adas_predict$yes>0.5,'yes','no'))
+
+### Decision Tree Save Precision / Recall/F
+Precision_dtadas<- posPredValue(dt_adas_test,test$class,positive = 'yes')
+recall_dtadas <- sensitivity(dt_adas_test,test$class,positive = 'yes')
+F1_dtadas <- (2*Precision_dtadas*recall_dtsmote)/(Precision_dtadas+recall_dtadas)
+
+
+#######################################################
+# Naive Bayes Model - trained on the ADASYN dataset #
+#######################################################
+
+### Naive Bayes Model Predictions
+nb_adas_predict <- predict(NB_adas ,test,type = 'prob')
+
+
+### Naive Bayes - Assign class to probabilities
+nb_adas_test <- factor(ifelse(nb_adas_predict$yes>0.5,'yes','no'))
+
+### Naive Bayes Save Precision / Recall/F
+Precision_nbadas <- posPredValue(nb_adas_test,test$class,positive = 'yes')
+recall_nbadas <- sensitivity(nb_adas_test,test$class,positive = 'yes')
+F1_nbadas <- (2*Precision_nbadas*recall_nbadas)/(Precision_nbadas+recall_nbadas)
+
+
+###############################################################
+# Linear Discriminant Analysis - trained on the ADASYN dataset #
+###############################################################
+
+
+### LDA Predictions
+lda_adas_predict <- predict(lda_adas ,test,type = 'prob')
+
+
+### LDA - Assign class to probabilities
+lda_adas_test <- factor(ifelse(lda_adas_predict$yes>0.5,'yes','no'))
+
+### LDA Save Precision / Recall/F
+Precision_ldaadas <- posPredValue(lda_adas_test,test$class,positive = 'yes')
+recall_ldaadas <- sensitivity(lda_adas_test,test$class,positive = 'yes')
+F1_ldaadas <- (2*Precision_ldaadas*recall_ldaadas)/(Precision_ldaadas+recall_ldaadas)
+```
+
+
+
+#Train classifiers on Density based SMOTE balanced dataset
+```{r}
+# Decision Tree : ADASYN Data
+
+dt_dbsmote <- train(class~.,
+                 data = train.dbsmote,
+                 method = 'rpart',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+
+# Naive Bayes regression : ADASYN Data
+
+NB_dbsmote <- train(class~.,
+                 data = train.dbsmote,
+                 method = 'naive_bayes',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+# Linear Discriminant Analysis : ADASYN Data
+
+lda_dbsmote <- train(class~.,
+                 data = train.dbsmote,
+                 method = 'lda',
+                 trControl= CTRL,
+                 metric='ROC'
+                 )
+
+#compile classifications on test data using models trained in the ADASYN balanced training dataset
+
+### Decision Tree Model Predictions
+dt_dbsmote_predict <- predict(dt_dbsmote ,test,type = 'prob')
+
+
+### Decision Tree - Assign class to probabilities
+dt_dbsmote_test <- factor(ifelse(dt_dbsmote_predict$yes>0.5,'yes','no'))
+
+### Decision Tree Save Precision / Recall/F
+Precision_dtdbsmote<- posPredValue(dt_dbsmote_test,test$class,positive = 'yes')
+recall_dtdbsmote <- sensitivity(dt_dbsmote_test,test$class,positive = 'yes')
+F1_dtdbsmote <- (2*Precision_dtdbsmote*recall_dtdbsmote)/(Precision_dtdbsmote+recall_dtdbsmote)
+
+
+###########################################################################
+# Naive Bayes Model - trained on the Density based SMOTE balanced dataset #
+###########################################################################
+
+### Naive Bayes Model Predictions
+nb_dbsmote_predict <- predict(NB_dbsmote ,test,type = 'prob')
+
+
+### Naive Bayes - Assign class to probabilities
+nb_dbsmote_test <- factor(ifelse(nb_dbsmote_predict$yes>0.5,'yes','no'))
+
+### Naive Bayes Save Precision / Recall/F
+Precision_nbdbsmote <- posPredValue(nb_dbsmote_test,test$class,positive = 'yes')
+recall_nbdbsmote <- sensitivity(nb_dbsmote_test,test$class,positive = 'yes')
+F1_nbdbsmote <- (2*Precision_nbdbsmote*recall_nbdbsmote)/(Precision_nbdbsmote+recall_nbdbsmote)
+
+
+######################################################################################
+# Linear Discriminant Analysis - trained on the Density based SMOTE balanced dataset #
+######################################################################################
+
+
+### LDA Predictions
+lda_dbsmote_predict <- predict(lda_dbsmote ,test,type = 'prob')
+
+
+### LDA - Assign class to probabilities
+lda_dbsmote_test <- factor(ifelse(lda_dbsmote_predict$yes>0.5,'yes','no'))
+
+### LDA Save Precision / Recall/F
+Precision_ldadbsmote <- posPredValue(lda_dbsmote_test,test$class,positive = 'yes')
+recall_ldadbsmote <- sensitivity(lda_dbsmote_test,test$class,positive = 'yes')
+F1_ldadbsmote <- (2*Precision_ldadbsmote*recall_ldadbsmote)/(Precision_ldadbsmote+recall_ldadbsmote)
+```
+
+
+#Compare the model performance
+```{r}
+## Reset the chart settings
+par(mfrow = c(1,1))
+
+##Compare the recall of the models : TP / TP + FN.To do that we will need to combine results into dataframe 
+model_compare_recall <- data.frame(Model=c('DT-Orig',
+                                           'NB-Orig',
+                                           'LDA-Orig',
+                                           'DT-SMOTE',
+                                           'NB-SMOTE',
+                                           'LDA-SMOTE',
+                                           'DT-ADASYN',
+                                           'NB-ADASYN',
+                                           'LDA-ADASYN',
+                                           'DT-DBSMOTE',
+                                           'NB-DBSMOTE',
+                                           'LDA-DBSMOTE'
+                                           ),
+                                   Recall = c(
+                                     recall_dt0rig,
+                                     recall_dtadas,
+                                     recall_dtdbsmote,
+                                     recall_dtsmote,
+                                     recall_lda0rig,
+                                     recall_ldaadas,
+                                     recall_ldadbsmote,
+                                     recall_ldasmote,
+                                     recall_nb0rig,
+                                     recall_nbdbsmote,
+                                     recall_ldasmote,
+                                     recall_nbadas
+                                   )
+                                   )
+
+
+ ggplot(data= model_compare_recall,mapping = aes(x= reorder(model_compare_recall$Model,-model_compare_recall$Recall),y=model_compare_recall$Recall))+
+   geom_bar(stat = 'identity',fill='light blue')+
+   xlab(label = 'Models')+
+   ylab(label = 'Recall Measure')+
+   geom_text(mapping = aes(label= round(model_compare_recall$Recall,2)))+
+   theme(axis.text.x = element_text(angle = 40))
+ 
+ ##Compare the Precision of the models : TP / TP + FN.To do that we will need to combine results into dataframe 
+model_compare_precision <- data.frame(Model=c('DT-Orig',
+                                           'NB-Orig',
+                                           'LDA-Orig',
+                                           'DT-SMOTE',
+                                           'NB-SMOTE',
+                                           'LDA-SMOTE',
+                                           'DT-ADASYN',
+                                           'NB-ADASYN',
+                                           'LDA-ADASYN',
+                                           'DT-DBSMOTE',
+                                           'NB-DBSMOTE',
+                                           'LDA-DBSMOTE'
+                                           ),
+                                   Precision = c(
+                                     Precision_dt0rig,
+                                     Precision_dtadas,
+                                     Precision_dtdbsmote,
+                                     Precision_dtsmote,
+                                     Precision_lda0rig,
+                                     Precision_ldaadas,
+                                     Precision_ldadbsmote,
+                                     Precision_ldasmote,
+                                     Precision_nb0rig,
+                                     Precision_nbdbsmote,
+                                     Precision_ldasmote,
+                                     Precision_nbadas
+                                   )
+                                   )
+
+
+ ggplot(data= model_compare_precision,mapping = aes(x= reorder(model_compare_precision$Model,-model_compare_precision$Precision),y=model_compare_precision$Precision))+
+   geom_bar(stat = 'identity',fill='light blue')+
+   xlab(label = 'Models')+
+   ylab(label = 'Precision Measure')+
+   geom_text(mapping = aes(label= round(model_compare_precision$Precision,2)))+
+   theme(axis.text.x = element_text(angle = 40))
+  
+ 
+
+ 
+ ##Compare the F1 of the models : TP / TP + FN.To do that we will need to combine results into dataframe 
+model_compare_F1 <- data.frame(Model=c('DT-Orig',
+                                           'NB-Orig',
+                                           'LDA-Orig',
+                                           'DT-SMOTE',
+                                           'NB-SMOTE',
+                                           'LDA-SMOTE',
+                                           'DT-ADASYN',
+                                           'NB-ADASYN',
+                                           'LDA-ADASYN',
+                                           'DT-DBSMOTE',
+                                           'NB-DBSMOTE',
+                                           'LDA-DBSMOTE'
+                                           ),
+                                   F1 = c(
+                                     F1_dt0rig,
+                                     F1_dtadas,
+                                     F1_dtdbsmote,
+                                     F1_dtsmote,
+                                     F1_lda0rig,
+                                     F1_ldaadas,
+                                     F1_ldadbsmote,
+                                     F1_ldasmote,
+                                     F1_nb0rig,
+                                     F1_nbdbsmote,
+                                     F1_ldasmote,
+                                     F1_nbadas
+                                   )
+                                   )
+
+
+ ggplot(data= model_compare_F1,mapping = aes(x= reorder(model_compare_F1$Model,-model_compare_F1$F1),y=model_compare_F1$F1))+
+   geom_bar(stat = 'identity',fill='light blue')+
+   ggtitle(label = 'Comparative F1 of Models on Test Data')+
+   xlab(label = 'Models')+
+   ylab(label = 'F1 Measure')+
+   geom_text(mapping = aes(label= round(model_compare_F1$F1,2)))+
+   theme(axis.text.x = element_text(angle = 40))
+  
+```
+
