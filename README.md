@@ -16,10 +16,15 @@ Project Organization :
 The project on detecting credit card fraud using R is broken down into the following steps:
 
 Step 1: Investigate the reasons unbalanced datasets are a challenge for classification algorithms  
+
 Step 2: Explore a dataset with R.
+
 Step 3: Utilize the R caret package to generate random testing and training datasets.
+
 Step 4: Using R and three methods from the smotefamily package, synthetically balance your training dataset.
+
 Step 5: Create predictions for the test dataset after training three classification algorithms (decision tree, naive Bayes, and linear discriminant analysis) using the naturally unbalanced dataset.
+
 Step 6: Utilize R to graphically compare models using the recall, precision, and F measure metrics for classification accuracy.
 
 About Dataset:
