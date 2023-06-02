@@ -1,7 +1,8 @@
 # Credit-Card-Fraud-Detection
-Project Overview : 
-Welcome to Credit Card Fraud Detection with R. In this project, you will learn how to use R to identify fraudulent credit card transactions with a variety of classification methods and use R to generate synthetic samples to address the common problem of classification bias for highly imbalanced datasets—the class of interest (fraud) represents less than 1% of the observations. 
-Class imbalance can make it difficult to detect the effect independent variables have on fraud, ultimately leading to higher misclassification rates. Fixing the imbalance allows the minority class (fraud) to be better learned by the classifier algorithms.
+Project Overview 
+Welcome to the Credit Card Fraud Detection project. This project represents my completion of the "Predicting Credit Fraud with R" guided project on Coursera. 
+I learned how to identify fraudulent credit card transactions using a variety of classification techniques while working on this project, and I also learned how to create synthetic samples using R to combat the problem of classification bias for highly unbalanced datasets, where the class of interest (fraud) accounts for less than 1% of the observations. 
+Class imbalance can make it challenging to determine the impact independent factors have on fraud, which eventually results in greater misclassification rates. Correcting the imbalance enables the fraud class to be better represented by the classifier methods.
 
 
 Project Objectives :
